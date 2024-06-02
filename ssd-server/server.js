@@ -1,12 +1,13 @@
 const express = require("express");
 const { json, urlencoded } = express;
 const cors = require("cors");
-const bodyParser = require('body-parser');
-const http = require('http');
+const bodyParser = require("body-parser");
+const http = require("http");
 const { Server } = require("socket.io");
 
 require("dotenv").config();
 
+// app
 const app = express();
 app.use(express.json());
 app.use(urlencoded({ extended: false }));
@@ -23,18 +24,18 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: "*",
-    methods: ["GET", "POST"]
+    methods: ["GET", "POST"],
   },
   pingTimeout: 60000,
 });
 
 // Pass io to routes
-const User_R = require('./routes/User_R');
-app.use('/u', User_R);
+const User_R = require("./routes/User_R");
+app.use("/u", User_R);
 
-const createChatRouter = require('./routes/Chat_R');
+const createChatRouter = require("./routes/Chat_R");
 const Chat_R = createChatRouter(io);
-app.use('/m', Chat_R);
+app.use("/m", Chat_R);
 
 io.on("connection", (socket) => {
   console.log("a user connected");
