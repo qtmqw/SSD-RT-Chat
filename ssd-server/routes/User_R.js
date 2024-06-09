@@ -28,7 +28,6 @@ schema
   .not()
   .spaces();
 
-// Route handler for user registration
 const SignUp = async (req, res) => {
   const { username, email, password, userType } = req.body;
 
@@ -67,7 +66,6 @@ const SignUp = async (req, res) => {
   }
 };
 
-// Route handler for user login
 const SignIn = async (req, res) => {
   const { email, password } = req.body;
 
@@ -82,18 +80,17 @@ const SignIn = async (req, res) => {
       return res.status(400).json({ error: "Invalid password" });
     }
 
-    const token = jwt.sign({ userId: user._id}, process.env.JWT_SECRET, {
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
       expiresIn: process.env.JWT_EXPIRATION_TIME || "1h",
     });
 
-    res.status(200).json({ status: "OK", data: token});
+    res.status(200).json({ status: "OK", data: token });
   } catch (error) {
     console.error(error.message);
     res.status(500).json({ error: "Server Error" });
   }
 };
 
-// Route handler to get all users
 const getAllUsers = async (req, res) => {
   try {
     const allUser = await User.find();
@@ -107,9 +104,11 @@ const getAllUsers = async (req, res) => {
 const getUserData = async (req, res) => {
   const { id } = req.params;
   try {
-    const userData = await User.findById(id);
+    const userData = await User.findById(id)
+      .populate("friends")
+      .populate("friendRequests");
     if (!userData) {
-      return res.status(404).send("User not found"); // Handle non-existent user
+      return res.status(404).send("User not found");
     }
     res.send({ status: "OK", data: userData });
   } catch (err) {
@@ -118,17 +117,13 @@ const getUserData = async (req, res) => {
   }
 };
 
-// Route handler to check if the user is an admin
 const checkAdminStatus = async (req, res) => {
-  // Get the JWT token from the request headers
   const token = req.header("Authorization")?.replace("Bearer ", "");
 
   try {
-    // Verify and decode the JWT token to get the user's email
     const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
     const userId = decodedToken.userId;
 
-    // Now you have the email, proceed to check if the user is an admin
     const user = await User.findById(userId);
 
     if (!user) {
@@ -146,13 +141,103 @@ const checkAdminStatus = async (req, res) => {
 
 const userEdit = async (req, res) => {
   try {
-    const userE = await User.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-    });
-    await userE.save();
-    res.json(userE);
+    const user = await User.findById(req.params.id);
+
+    if (!user) {
+      return res.status(404).json("User not found");
+    }
+
+    user.set(req.body);
+
+    const updatedUser = await user.save();
+
+    res.json(updatedUser);
   } catch (err) {
     res.status(400).json(`Error: ${err}`);
+  }
+};
+
+const sendFriendRequest = async (req, res) => {
+  const { id } = req.params;
+  const { friendId } = req.body;
+
+  try {
+    const user = await User.findById(id);
+    const friend = await User.findById(friendId);
+
+    if (!user || !friend) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (friend.friendRequests.includes(id)) {
+      return res.status(400).json({ error: "Friend request already sent" });
+    }
+
+    friend.friendRequests.push(id);
+    await friend.save();
+
+    res.status(200).json({ message: "Friend request sent successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
+
+const acceptFriendRequest = async (req, res) => {
+  const { id } = req.params;
+  const { friendId } = req.body;
+
+  try {
+    const user = await User.findById(id);
+    const friend = await User.findById(friendId);
+
+    if (!user || !friend) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (!user.friendRequests.includes(friendId)) {
+      return res.status(400).json({ error: "Friend request not found" });
+    }
+
+    user.friends.push(friendId);
+    friend.friends.push(id);
+
+    user.friendRequests = user.friendRequests.filter(
+      (requestId) => requestId.toString() !== friendId
+    );
+
+    await user.save();
+    await friend.save();
+
+    res.status(200).json({ message: "Friend request accepted successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
+
+const removeFriend = async (req, res) => {
+  const { userId, friendId } = req.params;
+
+  try {
+    const user = await User.findById(userId);
+    const friend = await User.findById(friendId);
+
+    if (!user || !friend) {
+      return res.status(404).json({ error: "User or friend not found" });
+    }
+
+    user.friends = user.friends.filter((f) => f.toString() !== friendId);
+
+    friend.friends = friend.friends.filter((f) => f.toString() !== userId);
+
+    await user.save();
+    await friend.save();
+
+    res.status(200).json({ message: "Friend removed successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server Error" });
   }
 };
 
@@ -162,5 +247,8 @@ router.get("/", getAllUsers);
 router.get("/isAdmin", checkAdminStatus);
 router.patch("/:id", userEdit);
 router.get("/:id", getUserData);
+router.post("/sendFriendRequest/:id", sendFriendRequest);
+router.post("/acceptFriendRequest/:id", acceptFriendRequest);
+router.delete("/removeFriend/:userId/:friendId", removeFriend);
 
 module.exports = router;

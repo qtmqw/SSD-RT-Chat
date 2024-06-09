@@ -37,6 +37,10 @@ const createChatRouter = require("./routes/Chat_R");
 const Chat_R = createChatRouter(io);
 app.use("/m", Chat_R);
 
+const createAltChatRouter = require("./routes/Alt_Chat");
+const AltChat_R = createAltChatRouter(io);
+app.use("/a", AltChat_R);
+
 io.on("connection", (socket) => {
   console.log("a user connected");
 
